@@ -47,7 +47,10 @@ class MockModel:
 
     @staticmethod
     def _build_script(instruction: str):
-        sensitive_dir = "C:/Windows/System32" if os.name == "nt" else "/etc"
+        # En Windows se apunta a una subcarpeta pequena y realista (el
+        # archivo hosts) en lugar de System32 completo, que tiene miles de
+        # entradas y ahogaria la demo sin aportar nada a la evidencia.
+        sensitive_dir = "C:/Windows/System32/drivers/etc" if os.name == "nt" else "/etc"
         lowered = instruction.lower()
 
         if "ignora lo anterior" in lowered:
