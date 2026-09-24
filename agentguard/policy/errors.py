@@ -1,6 +1,3 @@
-"""Errores del módulo de políticas."""
-
-
 class PolicyError(Exception):
     """La política no se pudo cargar o no cumple el esquema esperado.
 

@@ -1,9 +1,3 @@
-"""Valida un policies.yaml y muestra un resumen.
-
-Uso:
-    python -m agentguard.policy config/policies.yaml
-"""
-
 import sys
 
 from . import PolicyError, load_policies
