@@ -1,5 +1,0 @@
-{
-  "allowed_tools": ["read_file", "list_directory"],
-  "allowed_paths": ["workspace/"],
-  "denied_paths": ["C:/Windows", "/etc", "/sys", "/root"]
-}

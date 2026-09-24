@@ -1,7 +1,0 @@
-Tareas pendientes - Proyecto Seminario FDSI
-
-1. Terminar el modulo de autenticacion del dashboard interno.
-2. Revisar los logs de auditoria de la semana pasada.
-3. Preparar la presentacion para el comite de seguridad.
-4. Actualizar la documentacion de la API interna.
-5. Coordinar con el equipo de infraestructura la rotacion de credenciales.
