@@ -1,11 +1,11 @@
-# AgentGuard
+# agentguard-core
 
 Interceptor de políticas de mínimo privilegio para agentes LLM. Decide `ALLOW`, `BLOCK` o `HITL`
 para cada llamada a una herramienta según el área y el nivel de la sesión, la herramienta y sus
 argumentos. Se usa como librería, dentro del mismo proceso del agente.
 
 Este repositorio es el **producto**. El agente y el experimento (Config. A frente a Config. B)
-viven en `andimarket-agent`, que instala este paquete.
+viven en [`agentguard-andimarket`](https://github.com/AgentGuard-FDSI/agentguard-andimarket), que instala este paquete.
 
 ## Estructura
 
