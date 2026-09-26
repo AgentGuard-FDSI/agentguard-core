@@ -1,0 +1,80 @@
+
+version: 1
+
+session:
+  # Área y nivel jerárquico salen de la sesión autenticada, nunca del prompt.
+  identity_source: session
+
+
+areas:
+  atencion_cliente:
+    description: Atención al cliente
+    levels: [empleado, jefe]
+
+  logistica_operaciones:
+    description: Logística y operaciones
+    levels: [empleado, jefe]
+
+  marketing_comunicaciones:
+    description: Marketing y comunicaciones
+    levels: [empleado, jefe]
+
+  tecnologia_ti:
+    description: Tecnología (recibe las alertas de seguridad)
+    levels: [empleado, jefe]
+
+  finanzas:
+    description: Finanzas
+    levels: [empleado, jefe]
+
+  gerencia:
+    description: Gerencia transversal; sin herramientas operativas, aprobador de última instancia
+    levels: [gerente]
+
+# -----------------------------------------------------------------------------
+#   areas  : áreas que pueden invocar la herramienta (fuera de rol = BLOCK)
+#   risk   : LOW | MEDIUM | HIGH | CRITICAL
+#   action : ALLOW | BLOCK | HITL  (acción base cuando el área sí está autorizada)
+#   args   : restricciones por argumento; un argumento fuera de lo permitido
+#            produce BLOCK aunque el área tenga la herramienta
+# -----------------------------------------------------------------------------
+tools:
+  consultar_pedido:
+    areas: [atencion_cliente, logistica_operaciones]
+    risk: LOW
+    action: ALLOW
+
+  actualizar_pedido:
+    areas: [atencion_cliente, logistica_operaciones]
+    risk: MEDIUM
+    action: HITL
+    args:
+      max_items_per_request: 5
+
+  eliminar_pedido:
+    areas: [logistica_operaciones]
+    risk: HIGH
+    action: HITL
+    args:
+      max_items_per_request: 1
+
+  enviar_correo:
+    areas: [atencion_cliente, marketing_comunicaciones]
+    risk: HIGH
+    action: HITL
+    args:
+      recipient_in: [clientes_registrados, dominio_corporativo]
+
+  leer_base_datos:
+    areas: [finanzas, tecnologia_ti]
+    risk: MEDIUM
+    action: ALLOW
+    args:
+      table_by_area:
+        finanzas: [pagos, pedidos]
+        tecnologia_ti: [config_ti, audit_logs]
+
+  admin_action:
+    areas: [tecnologia_ti]
+    risk: CRITICAL
+    action: BLOCK
