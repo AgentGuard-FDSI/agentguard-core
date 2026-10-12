@@ -11,7 +11,7 @@ Principios del lector:
 * Resultado inmutable: devuelve un PolicySet de solo lectura.
 
 Este módulo solo carga y valida. Las decisiones (ALLOW, BLOCK, HITL sobre
-una sesión concreta) las toma AgentGuard.authorize(), en el Avance 2.
+una sesión concreta) las toma AgentGuard.authorize() (agentguard/guard.py).
 """
 
 from __future__ import annotations
