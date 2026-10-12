@@ -18,8 +18,34 @@ que instala este paquete.
 - Audit log encadenado.
 - Pruebas unitarias.
 
+## Uso
+
+```bash
+pip install -e .            # desde agentguard-andimarket: pip install -e ../agentguard-core
+python -m agentguard.policy config/policies.yaml        # valida la política
+python -m agentguard --area atencion_cliente --nivel empleado \
+    --tool consultar_pedido --args '{"order_id": "123"}'  # prueba authorize() por consola
+pytest
+```
+
+```python
+from agentguard import AgentGuard, ApprovalRequest, ConsoleApprover
+
+guard = AgentGuard.from_file("config/policies.yaml")
+decision = guard.authorize(session, tool, arguments)   # session: usuario, area, nivel
+if decision.needs_approval:
+    resultado = ConsoleApprover().request(ApprovalRequest.from_decision(session, tool, arguments, decision))
+registro = {**decision.to_dict(), "tool": tool, "usuario": session.usuario}  # para el audit log
+```
+
+El orden de evaluación, las reglas del motor y lo que queda para el Avance 3 están en
+[`docs/arquitectura.md`](docs/arquitectura.md).
+
 ## Estado
 
-Repositorio inicializado. El trabajo se reparte por avances: el motor básico en el Avance 2 y el
-resto del núcleo en el Avance 3. El prototipo anterior (Config. A con herramientas de archivos) queda
+- Avance 1: lector de `policies.yaml`.
+- Avance 2: `authorize()` con ALLOW, BLOCK y HITL por consola, y la regla de que la política es de
+  solo lectura para el agente.
+- Avance 3: restricciones por argumento, verificador de entrada, regla entre áreas, HITL con
+  separación de funciones y log encadenado. El prototipo anterior (Config. A con herramientas de archivos) queda
 en la etiqueta `legacy-config-a-archivos`.
