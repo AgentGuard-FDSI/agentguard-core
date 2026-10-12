@@ -18,6 +18,7 @@ class Rule(str, Enum):
     NIVEL_NO_DECLARADO = "nivel_no_declarado"
     FUERA_DE_ROL = "fuera_de_rol"
     ACCION_BASE = "accion_base"
+    ERROR_INTERNO = "error_interno"
 
 
 @dataclass(frozen=True)

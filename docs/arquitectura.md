@@ -150,7 +150,9 @@ en los argumentos, se ignora para decidir.
 ### R3. Fail-closed
 
 Política inválida significa que el proceso no arranca (`PolicyError`). Sesión, herramienta o
-argumentos inesperados significan BLOCK.
+argumentos inesperados significan BLOCK. Y `authorize()` nunca lanza excepciones: si algo falla de
+forma inesperada al evaluar (por ejemplo, una sesión que no se puede leer), la decisión es BLOCK con
+la regla `error_interno`.
 
 ## Frontera de confianza (limitación declarada)
 
