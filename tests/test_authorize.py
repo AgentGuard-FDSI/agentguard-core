@@ -212,3 +212,49 @@ def test_to_dict_es_serializable_para_el_audit_log(guard):
     datos = d.to_dict()
     assert datos == {"action": "BLOCK", "rule": "fuera_de_rol", "reason": d.reason}
     assert json.loads(json.dumps(datos, ensure_ascii=False)) == datos
+
+
+# ---------------------------------------------------------------------------
+# Fail-closed ante errores internos: authorize() nunca lanza, devuelve BLOCK
+# ---------------------------------------------------------------------------
+class _SesionQueFalla:
+    """Sesión cuyos atributos lanzan al leerse (p. ej. un objeto de sesión roto o mal integrado)."""
+
+    @property
+    def usuario(self):
+        raise RuntimeError("sesión rota")
+
+    area = "atencion_cliente"
+    nivel = "empleado"
+
+
+
+def test_error_al_leer_la_sesion_es_block(guard):
+    d = guard.authorize(_SesionQueFalla(), "consultar_pedido", {"order_id": "123"})
+    assert_decision(d, Action.BLOCK, Rule.ERROR_INTERNO)
+    assert "RuntimeError" in d.reason
+
+
+def test_error_interno_del_motor_es_block(guard, monkeypatch):
+    def falla(*_args, **_kwargs):
+        raise ValueError("fallo inesperado")
+
+    monkeypatch.setattr(AgentGuard, "_check_arguments", falla)
+    d = guard.authorize(ATENCION, "consultar_pedido", {"order_id": "123"})
+    assert_decision(d, Action.BLOCK, Rule.ERROR_INTERNO)
+
+
+def test_error_interno_nunca_produce_allow(guard, monkeypatch):
+    """Aunque el fallo ocurra justo antes de devolver ALLOW, la decisión es BLOCK."""
+    import agentguard.guard as modulo
+
+    monkeypatch.setattr(modulo, "_base_action", lambda _tool: (_ for _ in ()).throw(KeyError("x")))
+    d = guard.authorize(ATENCION, "consultar_pedido", {"order_id": "123"})
+    assert d.blocked and d.rule is Rule.ERROR_INTERNO
+
+
+def test_error_interno_es_serializable_para_el_audit_log(guard):
+    import json
+
+    d = guard.authorize(_SesionQueFalla(), "consultar_pedido", {"order_id": "123"})
+    assert json.loads(json.dumps(d.to_dict()))["rule"] == "error_interno"

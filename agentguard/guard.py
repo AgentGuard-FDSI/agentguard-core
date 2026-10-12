@@ -1,6 +1,7 @@
 """Motor de decisiones de AgentGuard: authorize(session, tool, arguments) -> Decision.
 
-Orden de evaluación (la primera regla que falla decide BLOCK; fail-closed):
+Orden de evaluación (la primera regla que falla decide BLOCK; fail-closed). Si algo falla de
+forma inesperada durante la evaluación, la decisión es BLOCK con la regla ERROR_INTERNO:
 
     0. Los argumentos deben ser un objeto (dict).
     1. La herramienta debe estar declarada en la política.
@@ -70,7 +71,17 @@ class AgentGuard:
 
     # ------------------------------------------------------------------
     def authorize(self, session: Any, tool: str, arguments: Mapping[str, Any]) -> Decision:
-        """Decide ALLOW, BLOCK o HITL para que `session` ejecute `tool` con `arguments`."""
+        """Decide ALLOW, BLOCK o HITL para que `session` ejecute `tool` con `arguments`.
+
+        Nunca lanza excepciones: cualquier error inesperado al evaluar (una sesión que falla al
+        leerse, un fallo del motor) se convierte en BLOCK con la regla ERROR_INTERNO (fail-closed).
+        """
+        try:
+            return self._evaluar(session, tool, arguments)
+        except Exception as exc:  # noqa: BLE001 - ante cualquier fallo, no se autoriza
+            return _block(Rule.ERROR_INTERNO, f"error interno al evaluar la política ({type(exc).__name__}: {exc})")
+
+    def _evaluar(self, session: Any, tool: str, arguments: Mapping[str, Any]) -> Decision:
         # 0. Argumentos con forma de objeto.
         if not isinstance(arguments, Mapping):
             return _block(Rule.ARGUMENTOS_INVALIDOS, "los argumentos deben ser un objeto clave: valor")
