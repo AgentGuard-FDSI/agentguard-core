@@ -9,8 +9,11 @@ Uso desde el agente (Config. B):
 """
 
 from .approval import ApprovalRequest, ApprovalResult, Approver, ConsoleApprover, FixedApprover
+from .audit import AuditChain, AuditEntry, VerifyResult
 from .decision import Decision, Rule
+from .directory import Directory, InMemoryDirectory, Person
 from .guard import AgentGuard, SessionLike
+from .hitl import ApprovalRule, ApprovalService, StoredApproval, ValidatingApprover, puede_aprobar
 from .policy import Action, PolicyError, PolicySet, Risk, load_policies
 
 __version__ = "0.2.0"
@@ -20,14 +23,25 @@ __all__ = [
     "AgentGuard",
     "ApprovalRequest",
     "ApprovalResult",
+    "ApprovalRule",
+    "ApprovalService",
     "Approver",
+    "AuditChain",
+    "AuditEntry",
     "ConsoleApprover",
     "Decision",
+    "Directory",
     "FixedApprover",
+    "InMemoryDirectory",
+    "Person",
     "PolicyError",
     "PolicySet",
     "Risk",
     "Rule",
     "SessionLike",
+    "StoredApproval",
+    "ValidatingApprover",
+    "VerifyResult",
     "load_policies",
+    "puede_aprobar",
 ]
