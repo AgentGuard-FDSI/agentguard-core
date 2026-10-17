@@ -29,13 +29,25 @@ pytest
 ```
 
 ```python
-from agentguard import AgentGuard, ApprovalRequest, ConsoleApprover
+from agentguard import (AgentGuard, ApprovalRequest, ApprovalService, AuditChain, ConsoleApprover,
+                        InMemoryDirectory, ValidatingApprover)
 
-guard = AgentGuard.from_file("config/policies.yaml")
-decision = guard.authorize(session, tool, arguments)   # session: usuario, area, nivel
+guard = AgentGuard.from_file("config/policies.yaml", es_cliente=es_cliente_registrado)
+cadena = AuditChain("data/audit.db")                                  # log encadenado
+aprobador = ValidatingApprover(                                       # separación de funciones
+    ApprovalService(guard.policy, InMemoryDirectory(personas), "data/hitl.db", chain=cadena),
+    ConsoleApprover(), run_id=run_id)
+
+decision = guard.authorize(session, tool, arguments, solicitud=run_id)   # session: usuario, area, nivel
 if decision.needs_approval:
-    resultado = ConsoleApprover().request(ApprovalRequest.from_decision(session, tool, arguments, decision))
-registro = {**decision.to_dict(), "tool": tool, "usuario": session.usuario}  # para el audit log
+    resultado = aprobador.request(ApprovalRequest.from_decision(session, tool, arguments, decision))
+cadena.registrar_decision(session, tool, arguments, decision, run_id=run_id)
+```
+
+Verificar que el registro no fue alterado:
+
+```bash
+python -m agentguard.audit_cli verify data/audit.db
 ```
 
 El orden de evaluación, las reglas del motor y lo que queda para el Avance 3 están en
@@ -46,6 +58,9 @@ El orden de evaluación, las reglas del motor y lo que queda para el Avance 3 es
 - Avance 1: lector de `policies.yaml`.
 - Avance 2: `authorize()` con ALLOW, BLOCK y HITL por consola, y la regla de que la política es de
   solo lectura para el agente.
-- Avance 3: restricciones por argumento, verificador de entrada, regla entre áreas, HITL con
-  separación de funciones y log encadenado. El prototipo anterior (Config. A con herramientas de archivos) queda
-en la etiqueta `legacy-config-a-archivos`.
+- Avance 3: restricciones por argumento (tabla por área, destinatario, tamaño del lote), HITL con
+  separación de funciones y cola de solicitudes pendientes, log encadenado verificable y la sección
+  `organizacion` de la política (para usar AgentGuard en cualquier empresa). Pendientes del Avance 3 en
+  otras tareas: verificador de entrada y regla entre áreas.
+
+El prototipo anterior (Config. A con herramientas de archivos) queda en la etiqueta `legacy-config-a-archivos`.

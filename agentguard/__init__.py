@@ -16,7 +16,7 @@ from .guard import AgentGuard, SessionLike
 from .hitl import ApprovalRule, ApprovalService, StoredApproval, ValidatingApprover, puede_aprobar
 from .policy import Action, PolicyError, PolicySet, Risk, load_policies
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "Action",
