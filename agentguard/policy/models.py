@@ -79,6 +79,20 @@ class SessionConfig:
 
 
 @dataclass(frozen=True)
+class Organization:
+    """Datos propios de la organización que usa AgentGuard (ninguno es obligatorio).
+
+    corporate_domain:    dominio de correo de la empresa; lo usa la restricción recipient_in
+                         (categoría dominio_corporativo) de enviar_correo.
+    final_approver_area: área que respalda las aprobaciones humanas cuando el solicitante es jefe
+                         o cuando no hay otro aprobador en su área (por ejemplo gerencia).
+    """
+
+    corporate_domain: str | None = None
+    final_approver_area: str | None = None
+
+
+@dataclass(frozen=True)
 class PolicySet:
     """Política completa, validada e inmutable."""
 
@@ -87,6 +101,7 @@ class PolicySet:
     areas: Mapping[str, AreaPolicy]
     tools: Mapping[str, ToolPolicy]
     source: str
+    organization: Organization = field(default_factory=Organization)
 
     def get_tool(self, name: str) -> ToolPolicy | None:
         """Devuelve la política de la herramienta, o None si no está declarada."""
@@ -95,6 +110,11 @@ class PolicySet:
     def get_area(self, name: str) -> AreaPolicy | None:
         """Devuelve el área, o None si no está declarada."""
         return self.areas.get(name)
+
+    def top_level(self, area: str) -> str | None:
+        """Nivel más alto del área (el último de `levels`), o None si el área no existe."""
+        area_policy = self.areas.get(area)
+        return area_policy.levels[-1] if area_policy else None
 
     def tools_for_area(self, area: str) -> tuple[str, ...]:
         """Nombres (ordenados) de las herramientas que el área puede invocar."""

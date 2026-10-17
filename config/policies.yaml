@@ -6,6 +6,14 @@ session:
   identity_source: session
 
 
+# Datos propios de la organización. AgentGuard no conoce el negocio: para otra empresa se cambian
+# este bloque, las áreas y las herramientas, no el código.
+#   dominio_corporativo         : dominio de correo de la empresa (recipient_in: dominio_corporativo)
+#   aprobador_ultima_instancia  : área que respalda las aprobaciones humanas (HITL)
+organizacion:
+  dominio_corporativo: andimarket.example.test
+  aprobador_ultima_instancia: gerencia
+
 areas:
   atencion_cliente:
     description: Atención al cliente

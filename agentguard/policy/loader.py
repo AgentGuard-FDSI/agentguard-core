@@ -27,6 +27,7 @@ from .errors import PolicyError
 from .models import (
     Action,
     AreaPolicy,
+    Organization,
     PolicySet,
     Risk,
     SessionConfig,
@@ -38,13 +39,16 @@ SUPPORTED_VERSION = 1
 ALLOWED_IDENTITY_SOURCES = frozenset({"session"})
 KNOWN_RECIPIENT_CATEGORIES = frozenset({"clientes_registrados", "dominio_corporativo"})
 
-_TOP_LEVEL_KEYS = frozenset({"version", "session", "areas", "tools"})
+_TOP_LEVEL_KEYS = frozenset({"version", "session", "areas", "tools", "organizacion"})
+_REQUIRED_TOP_LEVEL_KEYS = frozenset({"version", "session", "areas", "tools"})
+_ORGANIZATION_KEYS = frozenset({"dominio_corporativo", "aprobador_ultima_instancia"})
 _SESSION_KEYS = frozenset({"identity_source"})
 _AREA_KEYS = frozenset({"description", "levels"})
 _TOOL_KEYS = frozenset({"areas", "risk", "action", "args"})
 _ARG_KEYS = frozenset({"max_items_per_request", "recipient_in", "table_by_area"})
 
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
+_DOMAIN = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")
 
 
 # ---------------------------------------------------------------------------
@@ -97,12 +101,14 @@ def parse_policies(text: str, source: str = "<texto>") -> PolicySet:
         raise PolicyError(f"{source}: YAML inválido: {exc}") from exc
 
     root = _require_mapping(raw, "raíz del documento")
-    _check_keys(root, allowed=_TOP_LEVEL_KEYS, required=_TOP_LEVEL_KEYS, where="raíz del documento")
+    _check_keys(root, allowed=_TOP_LEVEL_KEYS, required=_REQUIRED_TOP_LEVEL_KEYS, where="raíz del documento")
 
     version = _parse_version(root["version"])
     session = _parse_session(root["session"])
     areas = _parse_areas(root["areas"])
     tools = _parse_tools(root["tools"], areas)
+    organization = _parse_organization(root.get("organizacion"), areas)
+    _check_recipient_domain(tools, organization)
 
     return PolicySet(
         version=version,
@@ -110,6 +116,7 @@ def parse_policies(text: str, source: str = "<texto>") -> PolicySet:
         areas=MappingProxyType(areas),
         tools=MappingProxyType(tools),
         source=source,
+        organization=organization,
     )
 
 
@@ -158,6 +165,35 @@ def _parse_areas(value: Any) -> dict[str, AreaPolicy]:
         levels = _require_identifier_list(area_map["levels"], f"{where}.levels")
         areas[name] = AreaPolicy(name=name, description=description, levels=levels)
     return areas
+
+
+def _parse_organization(value: Any, areas: dict[str, AreaPolicy]) -> Organization:
+    if value is None:
+        return Organization()
+    where = "organizacion"
+    body = _require_mapping(value, where)
+    _check_keys(body, allowed=_ORGANIZATION_KEYS, required=set(), where=where)
+
+    domain = body.get("dominio_corporativo")
+    if domain is not None and (not isinstance(domain, str) or not _DOMAIN.match(domain)):
+        raise PolicyError(
+            f"{where}.dominio_corporativo debe ser un dominio en minúsculas como 'empresa.com'; se recibió: {domain!r}"
+        )
+
+    final_area = body.get("aprobador_ultima_instancia")
+    if final_area is not None:
+        _require_identifier(final_area, f"{where}.aprobador_ultima_instancia")
+        _require_known_areas([final_area], areas, f"{where}.aprobador_ultima_instancia")
+    return Organization(corporate_domain=domain, final_approver_area=final_area)
+
+
+def _check_recipient_domain(tools: dict[str, ToolPolicy], organization: Organization) -> None:
+    for name, tool in tools.items():
+        if "dominio_corporativo" in tool.args.recipient_in and organization.corporate_domain is None:
+            raise PolicyError(
+                f"tools.{name}.args.recipient_in usa 'dominio_corporativo', pero falta "
+                "organizacion.dominio_corporativo"
+            )
 
 
 def _parse_tools(value: Any, areas: dict[str, AreaPolicy]) -> dict[str, ToolPolicy]:
