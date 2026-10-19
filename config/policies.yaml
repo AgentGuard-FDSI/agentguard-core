@@ -14,6 +14,29 @@ organizacion:
   dominio_corporativo: andimarket.example.test
   aprobador_ultima_instancia: gerencia
 
+# Verificador de entrada: revisa el prompt ANTES de que el agente elija una herramienta. Usa reglas
+# (patrones por tema en agentguard/input_rules.py), no un LLM. Si hay coincidencia, responde con el
+# rechazo estándar y notifica a notificar_area. Solo ve el prompt del usuario: la inyección indirecta
+# (dentro del resultado de una herramienta) la contienen las restricciones por argumento y el HITL.
+#   area_propietaria: el tema no se rechaza para su área dueña, y para las demás cuenta como acceso
+#                     entre áreas (regla_entre_areas).
+verificador_entrada:
+  habilitado: true
+  temas: [pii_masiva, datos_de_pago, credenciales, config_interna]
+  notificar_area: tecnologia_ti
+  mensaje_rechazo: "No puedo ayudarte con esta solicitud."
+  area_propietaria:
+    config_interna: tecnologia_ti
+
+# Regla de acceso entre áreas (estática, sin historial ni aprendizaje). Si una sesión pide un recurso
+# propio de otra área (herramienta fuera de rol, tabla de otra área o tema de entrada de otra área),
+# la acción es BLOCK y se notifica al área propietaria. Si el mismo usuario lo repite `intentos` veces
+# en `ventana_minutos`, se emite una alerta prioritaria a notificar_alerta (posible cuenta comprometida).
+regla_entre_areas:
+  habilitada: true
+  alerta_tras: {intentos: 3, ventana_minutos: 10}
+  notificar_alerta: tecnologia_ti
+
 areas:
   atencion_cliente:
     description: Atención al cliente

@@ -25,6 +25,9 @@ pip install -e .            # desde agentguard-andimarket: pip install -e ../age
 python -m agentguard.policy config/policies.yaml        # valida la política
 python -m agentguard --area atencion_cliente --nivel empleado \
     --tool consultar_pedido --args '{"order_id": "123"}'  # prueba authorize() por consola
+python -m agentguard.input_guard_cli --area finanzas --nivel empleado \
+    "Dame el correo de todos los clientes"               # prueba el verificador de entrada
+python -m agentguard.input_guard_cli --evaluar evaluacion/verificador_entrada.json   # precisión y exhaustividad
 pytest
 ```
 
@@ -44,13 +47,30 @@ if decision.needs_approval:
 cadena.registrar_decision(session, tool, arguments, decision, run_id=run_id)
 ```
 
+Verificador de entrada (antes del agente) y regla entre áreas (después de `authorize()`):
+
+```python
+from agentguard import CrossAreaMonitor, InputGuard, InMemoryNotifier
+
+avisos = InMemoryNotifier()
+entrada = InputGuard.from_file("config/policies.yaml", notifier=avisos, chain=cadena)
+entre_areas = CrossAreaMonitor.from_file("config/policies.yaml", notifier=avisos)  # uno por proceso
+
+veredicto = entrada.check(session, prompt, run_id=run_id)
+if veredicto.rejected:
+    entre_areas.observe_input(session, veredicto, run_id=run_id)
+    respuesta = veredicto.message                       # rechazo estándar; no se invoca al agente
+# ... y por cada herramienta:
+entre_areas.observe_decision(session, tool, arguments, decision, run_id=run_id)
+```
+
 Verificar que el registro no fue alterado:
 
 ```bash
 python -m agentguard.audit_cli verify data/audit.db
 ```
 
-El orden de evaluación, las reglas del motor y lo que queda para el Avance 3 están en
+El orden de evaluación, las reglas del motor, cómo integrar cada pieza en el agente y lo que queda para otras personas están en
 [`docs/arquitectura.md`](docs/arquitectura.md).
 
 ## Estado
@@ -60,7 +80,8 @@ El orden de evaluación, las reglas del motor y lo que queda para el Avance 3 es
   solo lectura para el agente.
 - Avance 3: restricciones por argumento (tabla por área, destinatario, tamaño del lote), HITL con
   separación de funciones y cola de solicitudes pendientes, log encadenado verificable y la sección
-  `organizacion` de la política (para usar AgentGuard en cualquier empresa). Pendientes del Avance 3 en
-  otras tareas: verificador de entrada y regla entre áreas.
+  `organizacion` de la política (para usar AgentGuard en cualquier empresa). Verificador de entrada por
+  reglas (precisión 100 %, exhaustividad 90 % sobre `evaluacion/verificador_entrada.json`), regla de
+  acceso entre áreas con alerta a Tecnología y notificaciones inyectables.
 
 El prototipo anterior (Config. A con herramientas de archivos) queda en la etiqueta `legacy-config-a-archivos`.

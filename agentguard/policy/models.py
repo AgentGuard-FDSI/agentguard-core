@@ -92,6 +92,44 @@ class Organization:
     final_approver_area: str | None = None
 
 
+DEFAULT_REJECT_MESSAGE = "No puedo ayudarte con esta solicitud."
+
+
+@dataclass(frozen=True)
+class InputGuardConfig:
+    """Configuración del verificador de entrada (sección verificador_entrada de policies.yaml).
+
+    enabled:        si está apagado, el verificador deja pasar todo (y lo dice en su veredicto).
+    topics:         temas que se revisan (pii_masiva, datos_de_pago, credenciales, config_interna).
+    notify_area:    área que recibe la notificación de cada rechazo (Tecnología).
+    reject_message: rechazo estándar que ve la persona; no revela qué regla coincidió.
+    topic_owner:    área dueña de un tema. Ese tema no se rechaza para su área dueña (Tecnología
+                    sí puede preguntar por su configuración) y, para las demás áreas, el rechazo
+                    cuenta como acceso entre áreas (regla_entre_areas).
+    """
+
+    enabled: bool = False
+    topics: tuple[str, ...] = ()
+    notify_area: str | None = None
+    reject_message: str = DEFAULT_REJECT_MESSAGE
+    topic_owner: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
+
+
+@dataclass(frozen=True)
+class CrossAreaConfig:
+    """Configuración de la regla de acceso entre áreas (sección regla_entre_areas de policies.yaml).
+
+    Si una sesión pide un recurso propio de otra área, la acción ya es BLOCK (fuera de rol o tabla no
+    permitida) y se notifica al área propietaria. Si el mismo usuario lo repite `attempts` veces en
+    `window_minutes` minutos, se emite una alerta prioritaria a `alert_area` (posible cuenta comprometida).
+    """
+
+    enabled: bool = False
+    attempts: int = 3
+    window_minutes: int = 10
+    alert_area: str | None = None
+
+
 @dataclass(frozen=True)
 class PolicySet:
     """Política completa, validada e inmutable."""
@@ -102,6 +140,8 @@ class PolicySet:
     tools: Mapping[str, ToolPolicy]
     source: str
     organization: Organization = field(default_factory=Organization)
+    input_guard: InputGuardConfig = field(default_factory=InputGuardConfig)
+    cross_area: CrossAreaConfig = field(default_factory=CrossAreaConfig)
 
     def get_tool(self, name: str) -> ToolPolicy | None:
         """Devuelve la política de la herramienta, o None si no está declarada."""

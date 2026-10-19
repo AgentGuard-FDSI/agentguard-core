@@ -25,8 +25,11 @@ import yaml
 
 from .errors import PolicyError
 from .models import (
+    DEFAULT_REJECT_MESSAGE,
     Action,
     AreaPolicy,
+    CrossAreaConfig,
+    InputGuardConfig,
     Organization,
     PolicySet,
     Risk,
@@ -38,14 +41,22 @@ from .models import (
 SUPPORTED_VERSION = 1
 ALLOWED_IDENTITY_SOURCES = frozenset({"session"})
 KNOWN_RECIPIENT_CATEGORIES = frozenset({"clientes_registrados", "dominio_corporativo"})
+# Temas del verificador de entrada. Las reglas de cada tema están en agentguard/input_rules.py
+# (una prueba comprueba que ambas listas coinciden).
+KNOWN_INPUT_TOPICS = frozenset({"pii_masiva", "datos_de_pago", "credenciales", "config_interna"})
 
-_TOP_LEVEL_KEYS = frozenset({"version", "session", "areas", "tools", "organizacion"})
+_TOP_LEVEL_KEYS = frozenset(
+    {"version", "session", "areas", "tools", "organizacion", "verificador_entrada", "regla_entre_areas"}
+)
 _REQUIRED_TOP_LEVEL_KEYS = frozenset({"version", "session", "areas", "tools"})
 _ORGANIZATION_KEYS = frozenset({"dominio_corporativo", "aprobador_ultima_instancia"})
 _SESSION_KEYS = frozenset({"identity_source"})
 _AREA_KEYS = frozenset({"description", "levels"})
 _TOOL_KEYS = frozenset({"areas", "risk", "action", "args"})
 _ARG_KEYS = frozenset({"max_items_per_request", "recipient_in", "table_by_area"})
+_INPUT_GUARD_KEYS = frozenset({"habilitado", "temas", "notificar_area", "mensaje_rechazo", "area_propietaria"})
+_CROSS_AREA_KEYS = frozenset({"habilitada", "alerta_tras", "notificar_alerta"})
+_ALERT_AFTER_KEYS = frozenset({"intentos", "ventana_minutos"})
 
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 _DOMAIN = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")
@@ -109,6 +120,8 @@ def parse_policies(text: str, source: str = "<texto>") -> PolicySet:
     tools = _parse_tools(root["tools"], areas)
     organization = _parse_organization(root.get("organizacion"), areas)
     _check_recipient_domain(tools, organization)
+    input_guard = _parse_input_guard(root.get("verificador_entrada"), areas)
+    cross_area = _parse_cross_area(root.get("regla_entre_areas"), areas)
 
     return PolicySet(
         version=version,
@@ -117,6 +130,8 @@ def parse_policies(text: str, source: str = "<texto>") -> PolicySet:
         tools=MappingProxyType(tools),
         source=source,
         organization=organization,
+        input_guard=input_guard,
+        cross_area=cross_area,
     )
 
 
@@ -194,6 +209,67 @@ def _check_recipient_domain(tools: dict[str, ToolPolicy], organization: Organiza
                 f"tools.{name}.args.recipient_in usa 'dominio_corporativo', pero falta "
                 "organizacion.dominio_corporativo"
             )
+
+
+def _parse_input_guard(value: Any, areas: dict[str, AreaPolicy]) -> InputGuardConfig:
+    """Sección verificador_entrada. Si no está, el verificador queda apagado."""
+    if value is None:
+        return InputGuardConfig()
+    where = "verificador_entrada"
+    body = _require_mapping(value, where)
+    _check_keys(body, allowed=_INPUT_GUARD_KEYS, required={"habilitado", "temas", "notificar_area"}, where=where)
+
+    enabled = _require_bool(body["habilitado"], f"{where}.habilitado")
+    topics = _require_identifier_list(body["temas"], f"{where}.temas")
+    unknown = sorted(t for t in topics if t not in KNOWN_INPUT_TOPICS)
+    if unknown:
+        raise PolicyError(f"{where}.temas contiene temas desconocidos {unknown}; permitidos: {sorted(KNOWN_INPUT_TOPICS)}")
+
+    notify_area = _require_identifier(body["notificar_area"], f"{where}.notificar_area")
+    _require_known_areas([notify_area], areas, f"{where}.notificar_area")
+
+    message = body.get("mensaje_rechazo", DEFAULT_REJECT_MESSAGE)
+    if not isinstance(message, str) or not message.strip():
+        raise PolicyError(f"{where}.mensaje_rechazo debe ser un texto no vacío")
+
+    owners: dict[str, str] = {}
+    if "area_propietaria" in body:
+        ow_where = f"{where}.area_propietaria"
+        ow = _require_mapping(body["area_propietaria"], ow_where)
+        for topic, area in ow.items():
+            if topic not in topics:
+                raise PolicyError(f"{ow_where}.{topic}: el tema no está en {where}.temas")
+            _require_identifier(area, f"{ow_where}.{topic}")
+            _require_known_areas([area], areas, f"{ow_where}.{topic}")
+            owners[topic] = area
+
+    return InputGuardConfig(
+        enabled=enabled,
+        topics=topics,
+        notify_area=notify_area,
+        reject_message=message.strip(),
+        topic_owner=MappingProxyType(owners),
+    )
+
+
+def _parse_cross_area(value: Any, areas: dict[str, AreaPolicy]) -> CrossAreaConfig:
+    """Sección regla_entre_areas. Si no está, la regla queda apagada."""
+    if value is None:
+        return CrossAreaConfig()
+    where = "regla_entre_areas"
+    body = _require_mapping(value, where)
+    _check_keys(body, allowed=_CROSS_AREA_KEYS, required=_CROSS_AREA_KEYS, where=where)
+
+    enabled = _require_bool(body["habilitada"], f"{where}.habilitada")
+    after_where = f"{where}.alerta_tras"
+    after = _require_mapping(body["alerta_tras"], after_where)
+    _check_keys(after, allowed=_ALERT_AFTER_KEYS, required=_ALERT_AFTER_KEYS, where=after_where)
+    attempts = _require_positive_int(after["intentos"], f"{after_where}.intentos")
+    window = _require_positive_int(after["ventana_minutos"], f"{after_where}.ventana_minutos")
+
+    alert_area = _require_identifier(body["notificar_alerta"], f"{where}.notificar_alerta")
+    _require_known_areas([alert_area], areas, f"{where}.notificar_alerta")
+    return CrossAreaConfig(enabled=enabled, attempts=attempts, window_minutes=window, alert_area=alert_area)
 
 
 def _parse_tools(value: Any, areas: dict[str, AreaPolicy]) -> dict[str, ToolPolicy]:
@@ -284,6 +360,18 @@ def _check_keys(body: dict, *, allowed: Iterable[str], required: Iterable[str], 
     missing = sorted(required - set(body))
     if missing:
         raise PolicyError(f"{where}: faltan claves obligatorias {missing}")
+
+
+def _require_bool(value: Any, where: str) -> bool:
+    if not isinstance(value, bool):
+        raise PolicyError(f"{where} debe ser true o false; se recibió {value!r}")
+    return value
+
+
+def _require_positive_int(value: Any, where: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise PolicyError(f"{where} debe ser un entero mayor o igual a 1; se recibió {value!r}")
+    return value
 
 
 def _require_identifier(value: Any, what: str) -> str:
