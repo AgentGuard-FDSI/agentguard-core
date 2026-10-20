@@ -17,6 +17,10 @@ class Rule(str, Enum):
     AREA_NO_DECLARADA = "area_no_declarada"
     NIVEL_NO_DECLARADO = "nivel_no_declarado"
     FUERA_DE_ROL = "fuera_de_rol"
+    ARGUMENTO_INVALIDO = "argumento_invalido"
+    TABLA_NO_PERMITIDA = "tabla_no_permitida"
+    DESTINATARIO_NO_PERMITIDO = "destinatario_no_permitido"
+    LOTE_EXCEDIDO = "lote_excedido"
     ACCION_BASE = "accion_base"
     ERROR_INTERNO = "error_interno"
 

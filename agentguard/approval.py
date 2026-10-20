@@ -7,9 +7,10 @@ ApprovalRequest y se la pasa a un aprobador. El aprobador se inyecta, para que:
   * en las pruebas y en el experimento no haya input() que deje el proceso colgado
     (FixedApprover devuelve siempre la misma respuesta).
 
-AVANCE 3: separación de funciones (el aprobador debe ser un jefe distinto del solicitante, con
-gerencia como respaldo), solicitudes PENDING en SQLite y registro en el log encadenado. En el
-Avance 2 el aprobador por consola solo pide un nombre y lo devuelve en la respuesta.
+El aprobador por consola solo pide un nombre y lo devuelve. La separación de funciones (que el
+aprobador sea otra persona, con rango suficiente y del área correcta, o de gerencia como respaldo),
+la cola de solicitudes pendientes y el registro en el log encadenado están en agentguard.hitl:
+ValidatingApprover envuelve cualquier aprobador de este módulo y le aplica esas reglas.
 """
 
 from __future__ import annotations
@@ -47,9 +48,13 @@ class ApprovalRequest:
 
 @dataclass(frozen=True)
 class ApprovalResult:
+    """Respuesta del aprobador. `rule` es el código de la regla de separación de funciones que
+    impidió la aprobación (vacío si la decisión fue válida; ver agentguard.hitl.ApprovalRule)."""
+
     approved: bool
     approver: str
     comment: str = field(default="")
+    rule: str = field(default="")
 
 
 class Approver(Protocol):

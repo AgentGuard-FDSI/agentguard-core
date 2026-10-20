@@ -148,3 +148,63 @@ def test_yaml_mal_formado():
 def test_archivo_inexistente(tmp_path):
     with pytest.raises(PolicyError, match="No se encontró"):
         load_policies(tmp_path / "no_existe.yaml")
+
+
+# ---------------------------------------------------------------------------
+# Sección organizacion (dominio corporativo y área de aprobación final)
+# ---------------------------------------------------------------------------
+_POLITICA = Path(__file__).resolve().parents[1] / "config" / "policies.yaml"
+
+
+def _texto_politica(**cambios):
+    texto = _POLITICA.read_text(encoding="utf-8")
+    for viejo, nuevo in cambios.values():
+        assert viejo in texto, viejo
+        texto = texto.replace(viejo, nuevo)
+    return texto
+
+
+def test_la_politica_del_proyecto_declara_la_organizacion():
+    org = load_policies(_POLITICA).organization
+    assert org.corporate_domain == "andimarket.example.test" and org.final_approver_area == "gerencia"
+
+
+def test_la_organizacion_es_opcional_si_no_se_usa_el_dominio():
+    texto = _texto_politica(
+        a=("organizacion:\n  dominio_corporativo: andimarket.example.test\n  aprobador_ultima_instancia: gerencia\n", ""),
+        b=("recipient_in: [clientes_registrados, dominio_corporativo]", "recipient_in: [clientes_registrados]"),
+    )
+    org = parse_policies(texto).organization
+    assert org.corporate_domain is None and org.final_approver_area is None
+
+
+def test_el_dominio_corporativo_es_obligatorio_si_una_herramienta_lo_usa():
+    texto = _texto_politica(a=("  dominio_corporativo: andimarket.example.test\n", ""))
+    with pytest.raises(PolicyError, match="dominio_corporativo"):
+        parse_policies(texto)
+
+
+@pytest.mark.parametrize("dominio", ["ANDIMARKET.com", "sin-punto", "a..b", "-malo.com", "con espacio.com", "7", "''"])
+def test_rechaza_dominios_invalidos(dominio):
+    texto = _texto_politica(a=("dominio_corporativo: andimarket.example.test", f"dominio_corporativo: {dominio}"))
+    with pytest.raises(PolicyError, match="dominio_corporativo"):
+        parse_policies(texto)
+
+
+def test_rechaza_un_area_de_aprobacion_final_inexistente():
+    texto = _texto_politica(a=("aprobador_ultima_instancia: gerencia", "aprobador_ultima_instancia: direccion"))
+    with pytest.raises(PolicyError, match="áreas no declaradas"):
+        parse_policies(texto)
+
+
+def test_rechaza_claves_desconocidas_en_la_organizacion():
+    texto = _texto_politica(a=("  aprobador_ultima_instancia: gerencia\n", "  aprobador_ultima_instancia: gerencia\n  telefono: 123\n"))
+    with pytest.raises(PolicyError, match="claves desconocidas"):
+        parse_policies(texto)
+
+
+def test_nivel_mas_alto_de_cada_area():
+    politica = load_policies(_POLITICA)
+    assert politica.top_level("atencion_cliente") == "jefe"
+    assert politica.top_level("gerencia") == "gerente"
+    assert politica.top_level("no_existe") is None

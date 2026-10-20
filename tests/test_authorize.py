@@ -67,44 +67,26 @@ def test_admin_action_es_block_incluso_para_tecnologia(guard):
     assert_decision(d, Action.BLOCK, Rule.ACCION_BASE)
 
 
-def test_exfiltracion_enviar_correo_desde_atencion_avance2_es_hitl(guard):
-    """Escenario 5 en el Avance 2: el área sí tiene enviar_correo, así que queda en HITL.
-
-    El ataque solo se contiene si el aprobador rechaza. El BLOCK por destinatario llega en el Avance 3.
-    """
+def test_exfiltracion_enviar_correo_a_destinatario_externo_es_block(guard):
+    """Escenario 5: el área tiene enviar_correo, pero el destinatario no es cliente ni corporativo."""
     d = guard.authorize(ATENCION, "enviar_correo",
                         {"destinatario": "attacker@example.test", "contenido": "Registro completo"})
-    assert_decision(d, Action.HITL, Rule.ACCION_BASE)
+    assert_decision(d, Action.BLOCK, Rule.DESTINATARIO_NO_PERMITIDO)
 
 
-def test_datos_leer_clientes_desde_finanzas_avance2_es_allow(guard):
-    """Escenario 6 en el Avance 2: Finanzas sí tiene leer_base_datos y aún no se restringe la tabla."""
+def test_datos_finanzas_no_lee_clientes_es_block(guard):
+    """Escenario 6: Finanzas tiene leer_base_datos, pero solo las tablas pagos y pedidos."""
     d = guard.authorize(FINANZAS, "leer_base_datos", {"tabla": "clientes"})
-    assert_decision(d, Action.ALLOW, Rule.ACCION_BASE)
+    assert_decision(d, Action.BLOCK, Rule.TABLA_NO_PERMITIDA)
 
 
-# ---------------------------------------------------------------------------
-# Restricciones por argumento: AVANCE 3. Fallan a propósito hasta que se implementen;
-# strict=True hace que, cuando pasen, la suite avise para quitar el xfail.
-# ---------------------------------------------------------------------------
-AVANCE_3 = pytest.mark.xfail(strict=True, reason="restricciones por argumento: Avance 3")
+def test_finanzas_no_lee_config_ti(guard):
+    d = guard.authorize(FINANZAS, "leer_base_datos", {"tabla": "config_ti"})
+    assert_decision(d, Action.BLOCK, Rule.TABLA_NO_PERMITIDA)
 
 
-@AVANCE_3
-def test_avance3_exfiltracion_destinatario_externo_es_block(guard):
-    d = guard.authorize(ATENCION, "enviar_correo",
-                        {"destinatario": "attacker@example.test", "contenido": "Registro completo"})
-    assert d.action is Action.BLOCK
-
-
-@AVANCE_3
-def test_avance3_finanzas_no_lee_clientes(guard):
-    assert guard.authorize(FINANZAS, "leer_base_datos", {"tabla": "clientes"}).action is Action.BLOCK
-
-
-@AVANCE_3
-def test_avance3_finanzas_no_lee_config_ti(guard):
-    assert guard.authorize(FINANZAS, "leer_base_datos", {"tabla": "config_ti"}).action is Action.BLOCK
+def test_finanzas_si_lee_pagos(guard):
+    assert_decision(guard.authorize(FINANZAS, "leer_base_datos", {"tabla": "pagos"}), Action.ALLOW, Rule.ACCION_BASE)
 
 
 # ---------------------------------------------------------------------------
@@ -195,13 +177,24 @@ def test_acepta_la_session_de_andimarket_por_forma():
     assert isinstance(ATENCION, SessionLike)
 
 
+def _argumentos_validos(guard, tool, area):
+    """Argumentos que cumplen las restricciones de la herramienta para el área (si las hay)."""
+    args = guard.policy.tools[tool].args
+    if args.table_by_area:
+        return {"tabla": args.table_by_area[area][0]}
+    if args.recipient_in:
+        return {"destinatario": "alguien@" + guard.policy.organization.corporate_domain}
+    return {"order_id": "123"}
+
+
 def test_matriz_completa_area_herramienta(guard):
     """Toda combinación sigue la tabla 3.2: fuera de rol = BLOCK; dentro, la acción base."""
     for area in guard.policy.areas.values():
         for nivel in area.levels:
             sesion = Session("u", area.name, nivel)
             for tool in guard.policy.tools.values():
-                d = guard.authorize(sesion, tool.name, {})
+                argumentos = _argumentos_validos(guard, tool.name, area.name) if tool.allows_area(area.name) else {}
+                d = guard.authorize(sesion, tool.name, argumentos)
                 esperado = tool.action if tool.allows_area(area.name) else Action.BLOCK
                 assert d.action is esperado, (area.name, nivel, tool.name, str(d))
 
